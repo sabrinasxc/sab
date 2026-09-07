@@ -101,6 +101,19 @@ export async function applyGmailLabelsByName(mailboxId: string, messageId: strin
   return modifyGmailMessageLabels(mailboxId, messageId, labels.map((label) => label.id), options?.archive ? ["INBOX"] : []);
 }
 
+export function modifyGmailThreadLabels(mailboxId: string, threadId: string, addLabelIds: string[] = [], removeLabelIds: string[] = []) {
+  return gmailFetch<{ id: string; historyId?: string }>(mailboxId, `/threads/${encodeURIComponent(threadId)}/modify`, {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({ addLabelIds, removeLabelIds }),
+  });
+}
+
+export async function applyGmailThreadLabelsByName(mailboxId: string, threadId: string, labelNames: string[], options?: { archive?: boolean }) {
+  const labels = await Promise.all(labelNames.map((name) => ensureGmailLabel(mailboxId, name)));
+  return modifyGmailThreadLabels(mailboxId, threadId, labels.map((label) => label.id), options?.archive ? ["INBOX"] : []);
+}
+
 export function trashGmailMessage(mailboxId: string, messageId: string) {
   return gmailFetch<{ id: string; threadId: string }>(mailboxId, `/messages/${encodeURIComponent(messageId)}/trash`, { method: "POST" });
 }
