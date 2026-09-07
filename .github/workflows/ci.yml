@@ -16,18 +16,43 @@ jobs:
         with:
           node-version: 22
       - run: npm install --no-audit --no-fund
-      - run: npm run typecheck
-      - run: npm test
-      - run: npm run lint
+      - name: Typecheck
+        id: typecheck
+        continue-on-error: true
+        run: npm run typecheck 2>&1 | tee typecheck.log
+      - name: Test
+        id: test
+        continue-on-error: true
+        run: npm test 2>&1 | tee test.log
+      - name: Lint
+        id: lint
+        continue-on-error: true
+        run: npm run lint 2>&1 | tee lint.log
       - name: Build
         id: build
         continue-on-error: true
         run: npm run build 2>&1 | tee build.log
-      - name: Report build failure
-        if: steps.build.outcome == 'failure'
+      - name: Report failures
+        if: steps.typecheck.outcome == 'failure' || steps.test.outcome == 'failure' || steps.lint.outcome == 'failure' || steps.build.outcome == 'failure'
         env:
           GH_TOKEN: ${{ github.token }}
-        run: gh issue create --title "CI build failure ${{ github.run_number }}" --body-file build.log
-      - name: Fail on build
-        if: steps.build.outcome == 'failure'
+        run: |
+          {
+            echo '## CI diagnostics'
+            echo
+            echo '### typecheck'
+            cat typecheck.log || true
+            echo
+            echo '### tests'
+            cat test.log || true
+            echo
+            echo '### lint'
+            cat lint.log || true
+            echo
+            echo '### build'
+            cat build.log || true
+          } > ci.log
+          gh issue create --title "CI diagnostics ${{ github.run_number }}" --body-file ci.log
+      - name: Enforce gate
+        if: steps.typecheck.outcome == 'failure' || steps.test.outcome == 'failure' || steps.lint.outcome == 'failure' || steps.build.outcome == 'failure'
         run: exit 1
