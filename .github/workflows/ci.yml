@@ -16,18 +16,18 @@ jobs:
         with:
           node-version: 22
       - run: npm install --no-audit --no-fund
-      - name: Typecheck
-        id: typecheck
-        continue-on-error: true
-        run: npm run typecheck 2>&1 | tee typecheck.log
-      - name: Report typecheck failure
-        if: steps.typecheck.outcome == 'failure'
-        env:
-          GH_TOKEN: ${{ github.token }}
-        run: gh issue create --title "CI typecheck failure ${{ github.run_number }}" --body-file typecheck.log
-      - name: Fail on typecheck
-        if: steps.typecheck.outcome == 'failure'
-        run: exit 1
+      - run: npm run typecheck
       - run: npm test
       - run: npm run lint
-      - run: npm run build
+      - name: Build
+        id: build
+        continue-on-error: true
+        run: npm run build 2>&1 | tee build.log
+      - name: Report build failure
+        if: steps.build.outcome == 'failure'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh issue create --title "CI build failure ${{ github.run_number }}" --body-file build.log
+      - name: Fail on build
+        if: steps.build.outcome == 'failure'
+        run: exit 1
