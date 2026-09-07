@@ -33,8 +33,19 @@ describe("deterministicPersonalInboxRule", () => {
     expect(result?.labels).toContain(PRIORITY_LABELS.filterMiss);
   });
 
+  it("keeps protected Amazon pickup messages out of filter-miss handling", () => {
+    const result = deterministicPersonalInboxRule({ ...base, from: "shipment-tracking@amazon.com", subject: "Your Whole Foods pickup is ready" });
+    expect(result).toBeNull();
+  });
+
+  it("flags non-protected Amazon messages that escape native filters", () => {
+    const result = deterministicPersonalInboxRule({ ...base, from: "store-news@amazon.com", subject: "Recommended products" });
+    expect(result?.action).toBe("FILTER_MISS_REVIEW");
+  });
+
   it("escalates Google Docs mentions rather than archiving silently", () => {
     const result = deterministicPersonalInboxRule({ ...base, from: "comments-noreply@docs.google.com", subject: "Sabrina was mentioned in a Google Docs file" });
+    expect(result?.action).toBe("ACTION_NEEDED_NOTIFICATION");
     expect(result?.labels).toEqual([PRIORITY_LABELS.actionNeeded]);
     expect(result?.requiresHumanReview).toBe(true);
   });
