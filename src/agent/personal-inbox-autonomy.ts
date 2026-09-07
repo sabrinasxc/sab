@@ -4,6 +4,7 @@ import {
   hasKnownPartnerTag,
   hasPodcastPitchExtraAsk,
 } from "./personal-inbox-policy";
+import type { RiskLevel } from "@/domain/agent";
 
 export const PERSONAL_INBOX_HARD_POLICY = `Authoritative personal master-inbox policy:
 - Scope: ${PERSONAL_MASTER_INBOX} only.
@@ -38,6 +39,7 @@ export type PodcastAutoSendEligibilityInput = {
   crmSearchFailures: number;
   crmLocationsSearched: number;
   triageConfidence: number;
+  triageRisk: RiskLevel;
   globalAutoSendActive: boolean;
   businessAutoSendActive: boolean;
   mailboxAutoSendActive: boolean;
@@ -51,6 +53,7 @@ export function evaluateCanonicalPodcastAutoSend(input: PodcastAutoSendEligibili
   if (input.crmSearchFailures > 0) reasons.push("crm_lookup_failure");
   if (input.crmMatches.length > 0) reasons.push("existing_crm_relationship_requires_personal_review");
   if (input.crmMatches.some((match) => hasKnownPartnerTag(match.contact?.tags))) reasons.push("known_partner_requires_personal_reply");
+  if (input.triageRisk !== "LOW") reasons.push("risk_above_low");
   if (input.triageConfidence < 0.95) reasons.push("classification_confidence_below_auto_send_threshold");
   if (!input.globalAutoSendActive) reasons.push("global_auto_send_disabled");
   if (!input.businessAutoSendActive) reasons.push("business_auto_send_disabled");
