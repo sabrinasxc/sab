@@ -9,12 +9,7 @@ export async function refreshGmailAccessToken(connectionId: string) {
   const { data: connection, error } = await db.from("oauth_connections").select("*").eq("id", connectionId).single();
   if (error || !connection?.encrypted_refresh_token) throw new Error("GMAIL_REFRESH_TOKEN_MISSING");
   const env = getServerEnv();
-  const body = new URLSearchParams({
-    client_id: env.GOOGLE_CLIENT_ID,
-    client_secret: env.GOOGLE_CLIENT_SECRET,
-    refresh_token: decryptSecret(connection.encrypted_refresh_token),
-    grant_type: "refresh_token",
-  });
+  const body = new URLSearchParams({ client_id: env.GOOGLE_CLIENT_ID, client_secret: env.GOOGLE_CLIENT_SECRET, refresh_token: decryptSecret(connection.encrypted_refresh_token), grant_type: "refresh_token" });
   const response = await fetch("https://oauth2.googleapis.com/token", { method: "POST", headers: { "content-type": "application/x-www-form-urlencoded" }, body });
   if (!response.ok) throw new Error(`GMAIL_TOKEN_REFRESH_FAILED:${response.status}`);
   const token = await response.json() as { access_token: string; expires_in: number };
@@ -44,76 +39,29 @@ async function gmailFetch<T>(mailboxId: string, path: string, init?: RequestInit
   return response.status === 204 ? (undefined as T) : response.json() as Promise<T>;
 }
 
-export function getGmailProfile(mailboxId: string) {
-  return gmailFetch<{ emailAddress: string; historyId: string }>(mailboxId, "/profile");
+export function getGmailProfile(mailboxId: string) { return gmailFetch<{ emailAddress: string; historyId: string }>(mailboxId, "/profile"); }
+export function listGmailHistory(mailboxId: string, startHistoryId: string, pageToken?: string) { const params = new URLSearchParams({ startHistoryId, historyTypes: "messageAdded" }); if (pageToken) params.set("pageToken", pageToken); return gmailFetch<{ history?: Array<{ messagesAdded?: Array<{ message: { id: string; threadId: string } }> }>; nextPageToken?: string; historyId?: string }>(mailboxId, `/history?${params}`); }
+export function getGmailMessage(mailboxId: string, messageId: string) { return gmailFetch<any>(mailboxId, `/messages/${encodeURIComponent(messageId)}?format=full`); }
+export function startGmailWatch(mailboxId: string) { const env = getServerEnv(); return gmailFetch<{ historyId: string; expiration: string }>(mailboxId, "/watch", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ topicName: env.GOOGLE_PUBSUB_TOPIC, labelIds: ["INBOX"] }) }); }
+export function sendGmailRaw(mailboxId: string, raw: string, threadId?: string) { return gmailFetch<{ id: string; threadId: string }>(mailboxId, "/messages/send", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ raw, ...(threadId ? { threadId } : {}) }) }); }
+
+export function createGmailDraft(mailboxId: string, raw: string, threadId?: string) {
+  return gmailFetch<{ id: string; message: { id: string; threadId: string } }>(mailboxId, "/drafts", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ message: { raw, ...(threadId ? { threadId } : {}) } }) });
 }
 
-export function listGmailHistory(mailboxId: string, startHistoryId: string, pageToken?: string) {
-  const params = new URLSearchParams({ startHistoryId, historyTypes: "messageAdded" });
-  if (pageToken) params.set("pageToken", pageToken);
-  return gmailFetch<{ history?: Array<{ messagesAdded?: Array<{ message: { id: string; threadId: string } }> }>; nextPageToken?: string; historyId?: string }>(mailboxId, `/history?${params}`);
+export function updateGmailDraft(mailboxId: string, draftId: string, raw: string, threadId?: string) {
+  return gmailFetch<{ id: string; message: { id: string; threadId: string } }>(mailboxId, `/drafts/${encodeURIComponent(draftId)}`, { method: "PUT", headers: { "content-type": "application/json" }, body: JSON.stringify({ message: { raw, ...(threadId ? { threadId } : {}) } }) });
 }
 
-export function getGmailMessage(mailboxId: string, messageId: string) {
-  return gmailFetch<any>(mailboxId, `/messages/${encodeURIComponent(messageId)}?format=full`);
-}
-
-export function startGmailWatch(mailboxId: string) {
-  const env = getServerEnv();
-  return gmailFetch<{ historyId: string; expiration: string }>(mailboxId, "/watch", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ topicName: env.GOOGLE_PUBSUB_TOPIC, labelIds: ["INBOX"] }) });
-}
-
-export function sendGmailRaw(mailboxId: string, raw: string, threadId?: string) {
-  return gmailFetch<{ id: string; threadId: string }>(mailboxId, "/messages/send", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ raw, ...(threadId ? { threadId } : {}) }) });
-}
+export function deleteGmailDraft(mailboxId: string, draftId: string) { return gmailFetch<void>(mailboxId, `/drafts/${encodeURIComponent(draftId)}`, { method: "DELETE" }); }
+export function sendGmailDraft(mailboxId: string, draftId: string) { return gmailFetch<{ id: string; threadId: string }>(mailboxId, "/drafts/send", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ id: draftId }) }); }
 
 export type GmailLabel = { id: string; name: string; type?: string };
-
-export function listGmailLabels(mailboxId: string) {
-  return gmailFetch<{ labels?: GmailLabel[] }>(mailboxId, "/labels");
-}
-
-export function createGmailLabel(mailboxId: string, name: string) {
-  return gmailFetch<GmailLabel>(mailboxId, "/labels", {
-    method: "POST",
-    headers: { "content-type": "application/json" },
-    body: JSON.stringify({ name, labelListVisibility: "labelShow", messageListVisibility: "show" }),
-  });
-}
-
-export async function ensureGmailLabel(mailboxId: string, name: string) {
-  const existing = await listGmailLabels(mailboxId);
-  const match = existing.labels?.find((label) => label.name === name);
-  if (match) return match;
-  return createGmailLabel(mailboxId, name);
-}
-
-export function modifyGmailMessageLabels(mailboxId: string, messageId: string, addLabelIds: string[] = [], removeLabelIds: string[] = []) {
-  return gmailFetch<{ id: string; threadId: string; labelIds?: string[] }>(mailboxId, `/messages/${encodeURIComponent(messageId)}/modify`, {
-    method: "POST",
-    headers: { "content-type": "application/json" },
-    body: JSON.stringify({ addLabelIds, removeLabelIds }),
-  });
-}
-
-export async function applyGmailLabelsByName(mailboxId: string, messageId: string, labelNames: string[], options?: { archive?: boolean }) {
-  const labels = await Promise.all(labelNames.map((name) => ensureGmailLabel(mailboxId, name)));
-  return modifyGmailMessageLabels(mailboxId, messageId, labels.map((label) => label.id), options?.archive ? ["INBOX"] : []);
-}
-
-export function modifyGmailThreadLabels(mailboxId: string, threadId: string, addLabelIds: string[] = [], removeLabelIds: string[] = []) {
-  return gmailFetch<{ id: string; historyId?: string }>(mailboxId, `/threads/${encodeURIComponent(threadId)}/modify`, {
-    method: "POST",
-    headers: { "content-type": "application/json" },
-    body: JSON.stringify({ addLabelIds, removeLabelIds }),
-  });
-}
-
-export async function applyGmailThreadLabelsByName(mailboxId: string, threadId: string, labelNames: string[], options?: { archive?: boolean }) {
-  const labels = await Promise.all(labelNames.map((name) => ensureGmailLabel(mailboxId, name)));
-  return modifyGmailThreadLabels(mailboxId, threadId, labels.map((label) => label.id), options?.archive ? ["INBOX"] : []);
-}
-
-export function trashGmailMessage(mailboxId: string, messageId: string) {
-  return gmailFetch<{ id: string; threadId: string }>(mailboxId, `/messages/${encodeURIComponent(messageId)}/trash`, { method: "POST" });
-}
+export function listGmailLabels(mailboxId: string) { return gmailFetch<{ labels?: GmailLabel[] }>(mailboxId, "/labels"); }
+export function createGmailLabel(mailboxId: string, name: string) { return gmailFetch<GmailLabel>(mailboxId, "/labels", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ name, labelListVisibility: "labelShow", messageListVisibility: "show" }) }); }
+export async function ensureGmailLabel(mailboxId: string, name: string) { const existing = await listGmailLabels(mailboxId); const match = existing.labels?.find((label) => label.name === name); if (match) return match; return createGmailLabel(mailboxId, name); }
+export function modifyGmailMessageLabels(mailboxId: string, messageId: string, addLabelIds: string[] = [], removeLabelIds: string[] = []) { return gmailFetch<{ id: string; threadId: string; labelIds?: string[] }>(mailboxId, `/messages/${encodeURIComponent(messageId)}/modify`, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ addLabelIds, removeLabelIds }) }); }
+export async function applyGmailLabelsByName(mailboxId: string, messageId: string, labelNames: string[], options?: { archive?: boolean }) { const labels = await Promise.all(labelNames.map((name) => ensureGmailLabel(mailboxId, name))); return modifyGmailMessageLabels(mailboxId, messageId, labels.map((label) => label.id), options?.archive ? ["INBOX"] : []); }
+export function modifyGmailThreadLabels(mailboxId: string, threadId: string, addLabelIds: string[] = [], removeLabelIds: string[] = []) { return gmailFetch<{ id: string; historyId?: string }>(mailboxId, `/threads/${encodeURIComponent(threadId)}/modify`, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ addLabelIds, removeLabelIds }) }); }
+export async function applyGmailThreadLabelsByName(mailboxId: string, threadId: string, labelNames: string[], options?: { archive?: boolean }) { const labels = await Promise.all(labelNames.map((name) => ensureGmailLabel(mailboxId, name))); return modifyGmailThreadLabels(mailboxId, threadId, labels.map((label) => label.id), options?.archive ? ["INBOX"] : []); }
+export function trashGmailMessage(mailboxId: string, messageId: string) { return gmailFetch<{ id: string; threadId: string }>(mailboxId, `/messages/${encodeURIComponent(messageId)}/trash`, { method: "POST" }); }
