@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getServerEnv } from "@/lib/env";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
-import { ingestGmailHistory } from "@/integrations/gmail/ingest";
+import { inngest } from "@/lib/jobs/client";
 
 export async function POST(request: NextRequest) {
   const env = getServerEnv();
@@ -11,12 +11,6 @@ export async function POST(request: NextRequest) {
   const event = JSON.parse(Buffer.from(envelope.message.data, "base64").toString("utf8")) as { emailAddress: string; historyId: string };
   const db = createSupabaseAdminClient();
   const { data: mailbox } = await db.from("mailboxes").select("id").ilike("email_address", event.emailAddress).eq("provider", "GMAIL").single();
-  if (!mailbox) return NextResponse.json({ ok: true });
-  try {
-    await ingestGmailHistory(mailbox.id, event.historyId);
-    return NextResponse.json({ ok: true });
-  } catch (error) {
-    console.error("gmail webhook ingest failed", error);
-    return NextResponse.json({ ok: false }, { status: 500 });
-  }
+  if (mailbox) await inngest.send({ name: "gmail/history.received", data: { mailboxId: mailbox.id, historyId: event.historyId, pubsubMessageId: envelope.message.messageId ?? null } });
+  return NextResponse.json({ ok: true });
 }

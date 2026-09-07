@@ -1,18 +1,19 @@
 {
   "name": "ai-agent-email-os",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "private": true,
   "scripts": {
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "lint": "next lint",
+    "lint": "eslint .",
     "typecheck": "tsc --noEmit",
     "test": "vitest run"
   },
   "dependencies": {
     "@supabase/ssr": "^0.6.1",
     "@supabase/supabase-js": "^2.49.1",
+    "inngest": "^3.34.8",
     "next": "^15.2.0",
     "openai": "^4.86.1",
     "react": "^19.0.0",
