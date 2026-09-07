@@ -5,7 +5,7 @@ import { writeAudit } from "@/lib/audit";
 import { createGhlTask } from "@/integrations/ghl/client";
 import { sendDraftForAgentRun } from "./send";
 
-export async function executeAgentRun(agentRunId: string, actor: { actorType: "AI" | "USER"; actorId: string | null; approvalSatisfied: boolean; autoActionAllowed?: boolean }) {
+export async function executeAgentRun(agentRunId: string, actor: { actorType: "AI" | "USER"; actorId: string | null; approvalSatisfied: boolean; autoActionAllowed?: boolean; autoEmailAllowed?: boolean }) {
   const db = createSupabaseAdminClient();
   const { data: run } = await db.from("agent_runs").select("*, businesses!inner(*), mailboxes!inner(*), email_threads!inner(*)").eq("id", agentRunId).single();
   if (!run?.decision) throw new Error("AGENT_DECISION_NOT_FOUND");
@@ -14,7 +14,7 @@ export async function executeAgentRun(agentRunId: string, actor: { actorType: "A
   const switches = getKillSwitches();
   const results: Record<string, unknown> = {};
 
-  if (run.draft) results.email = await sendDraftForAgentRun(agentRunId, actor);
+  if (run.draft) results.email = await sendDraftForAgentRun(agentRunId, { actorType: actor.actorType, actorId: actor.actorId, approvalSatisfied: actor.approvalSatisfied, autoEmailAllowed: actor.autoEmailAllowed });
 
   const proposed = Array.isArray(run.decision.proposedToolActions) ? run.decision.proposedToolActions : [];
   for (let index = 0; index < proposed.length; index += 1) {
