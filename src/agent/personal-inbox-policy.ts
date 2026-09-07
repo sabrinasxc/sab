@@ -71,6 +71,14 @@ const NOTIFICATION_PATTERNS = [
   /asana/i, /heygen/i, /facebook/i, /linkedin/i, /zoom recording/i, /gohighlevel|highlevel|\bghl\b/i, /google docs?/i, /docs\.google\.com/i,
 ];
 
+const GOOGLE_DOC_MENTION_PATTERNS = [
+  /@mention/i,
+  /mentioned you/i,
+  /mentioned sabrina/i,
+  /sabrina (?:runbeck )?was mentioned/i,
+  /you were mentioned/i,
+];
+
 const PROMO_PATTERNS = [
   /@e\./i, /@mkt\./i, /@promo\./i, /@newsletter\./i, /unsubscribe/i, /% off/i, /sale ends/i, /limited time/i, /deal alert/i,
 ];
@@ -150,7 +158,7 @@ export function deterministicPersonalInboxRule(input: PersonalPolicyInput): Dete
     return { action: "FILTER_MISS_REVIEW", labels: [PRIORITY_LABELS.filterMiss], reason: "§4.1 native Gmail filter miss", requiresHumanReview: true };
   }
 
-  if ((/google docs?/i.test(text) || /docs\.google\.com/i.test(text)) && /@mention|mentioned you|mentioned sabrina/i.test(text)) {
+  if ((/google docs?/i.test(text) || /docs\.google\.com/i.test(text)) && GOOGLE_DOC_MENTION_PATTERNS.some((pattern) => pattern.test(text))) {
     return { action: "ACTION_NEEDED_NOTIFICATION", labels: [PRIORITY_LABELS.actionNeeded], reason: "§4.2 Google Docs @mention escalation", requiresHumanReview: true };
   }
 
