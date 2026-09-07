@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { requireUser } from "@/lib/auth/tenant";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import { executeAgentRun } from "@/agent/execute";
+import { removeApprovalGmailDraft } from "@/agent/gmail-review-draft";
 
 export async function POST(request: NextRequest, context: { params: Promise<{ id: string }> }) {
   const { user, supabase } = await requireUser();
@@ -13,6 +14,7 @@ export async function POST(request: NextRequest, context: { params: Promise<{ id
   const { data: claimed } = await db.from("approvals").update({ status: "APPROVED", reviewed_by: user.id, reviewed_at: new Date().toISOString() }).eq("id", id).in("status", ["PENDING", "EDITED"]).select("id").single();
   if (!claimed) return NextResponse.json({ error: "approval already handled" }, { status: 409 });
   try {
+    await removeApprovalGmailDraft(id);
     await executeAgentRun(approval.agent_run_id, { actorType: "USER", actorId: user.id, approvalSatisfied: true });
     return NextResponse.redirect(new URL("/", request.url), 303);
   } catch (error) {
