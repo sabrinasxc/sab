@@ -15,6 +15,7 @@ const serverEnvSchema = z.object({
   GHL_CLIENT_ID: z.string().min(1),
   GHL_CLIENT_SECRET: z.string().min(1),
   GHL_REDIRECT_URI: z.string().url(),
+  GHL_INSTALL_URL: z.string().url(),
   OPENAI_API_KEY: z.string().min(1),
   OPENAI_MODEL: z.string().min(1),
   AI_ACTIVE: z.enum(["true", "false"]).default("false"),
@@ -23,16 +24,11 @@ const serverEnvSchema = z.object({
 
 export function getServerEnv() {
   const parsed = serverEnvSchema.safeParse(process.env);
-  if (!parsed.success) {
-    throw new Error(`Invalid server environment: ${parsed.error.message}`);
-  }
+  if (!parsed.success) throw new Error(`Invalid server environment: ${parsed.error.message}`);
   return parsed.data;
 }
 
 export function getKillSwitches() {
   const env = getServerEnv();
-  return {
-    aiActive: env.AI_ACTIVE === "true",
-    autoSendActive: env.AUTO_SEND_ACTIVE === "true",
-  };
+  return { aiActive: env.AI_ACTIVE === "true", autoSendActive: env.AUTO_SEND_ACTIVE === "true" };
 }
