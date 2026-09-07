@@ -66,3 +66,41 @@ export function startGmailWatch(mailboxId: string) {
 export function sendGmailRaw(mailboxId: string, raw: string, threadId?: string) {
   return gmailFetch<{ id: string; threadId: string }>(mailboxId, "/messages/send", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ raw, ...(threadId ? { threadId } : {}) }) });
 }
+
+export type GmailLabel = { id: string; name: string; type?: string };
+
+export function listGmailLabels(mailboxId: string) {
+  return gmailFetch<{ labels?: GmailLabel[] }>(mailboxId, "/labels");
+}
+
+export function createGmailLabel(mailboxId: string, name: string) {
+  return gmailFetch<GmailLabel>(mailboxId, "/labels", {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({ name, labelListVisibility: "labelShow", messageListVisibility: "show" }),
+  });
+}
+
+export async function ensureGmailLabel(mailboxId: string, name: string) {
+  const existing = await listGmailLabels(mailboxId);
+  const match = existing.labels?.find((label) => label.name === name);
+  if (match) return match;
+  return createGmailLabel(mailboxId, name);
+}
+
+export function modifyGmailMessageLabels(mailboxId: string, messageId: string, addLabelIds: string[] = [], removeLabelIds: string[] = []) {
+  return gmailFetch<{ id: string; threadId: string; labelIds?: string[] }>(mailboxId, `/messages/${encodeURIComponent(messageId)}/modify`, {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({ addLabelIds, removeLabelIds }),
+  });
+}
+
+export async function applyGmailLabelsByName(mailboxId: string, messageId: string, labelNames: string[], options?: { archive?: boolean }) {
+  const labels = await Promise.all(labelNames.map((name) => ensureGmailLabel(mailboxId, name)));
+  return modifyGmailMessageLabels(mailboxId, messageId, labels.map((label) => label.id), options?.archive ? ["INBOX"] : []);
+}
+
+export function trashGmailMessage(mailboxId: string, messageId: string) {
+  return gmailFetch<{ id: string; threadId: string }>(mailboxId, `/messages/${encodeURIComponent(messageId)}/trash`, { method: "POST" });
+}
