@@ -68,7 +68,7 @@ const RECEIPT_PATTERNS = [
 ];
 
 const NOTIFICATION_PATTERNS = [
-  /asana/i, /heygen/i, /facebook/i, /linkedin/i, /zoom recording/i, /gohighlevel|highlevel|\bghl\b/i, /google docs?/i,
+  /asana/i, /heygen/i, /facebook/i, /linkedin/i, /zoom recording/i, /gohighlevel|highlevel|\bghl\b/i, /google docs?/i, /docs\.google\.com/i,
 ];
 
 const PROMO_PATTERNS = [
@@ -150,7 +150,7 @@ export function deterministicPersonalInboxRule(input: PersonalPolicyInput): Dete
     return { action: "FILTER_MISS_REVIEW", labels: [PRIORITY_LABELS.filterMiss], reason: "§4.1 native Gmail filter miss", requiresHumanReview: true };
   }
 
-  if (/google docs?/i.test(text) && /@mention|mentioned you|mentioned sabrina/i.test(text)) {
+  if ((/google docs?/i.test(text) || /docs\.google\.com/i.test(text)) && /@mention|mentioned you|mentioned sabrina/i.test(text)) {
     return { action: "ACTION_NEEDED_NOTIFICATION", labels: [PRIORITY_LABELS.actionNeeded], reason: "§4.2 Google Docs @mention escalation", requiresHumanReview: true };
   }
 
@@ -193,7 +193,8 @@ export const SEQUENCE_LABS_REQUIRED_FRAME =
 export function validateSequenceLabsDraft(draft: string) {
   const violations: string[] = [];
   if (!draft.includes(SEQUENCE_LABS_REQUIRED_FRAME)) violations.push("missing_research_use_frame");
-  if (/\b(dose|dosage|inject|administer|treat|cure|therapy|therapeutic outcome|patient protocol)\b/i.test(draft)) violations.push("clinical_or_dosing_language");
+  const contentOutsideMandatoryFrame = draft.replace(SEQUENCE_LABS_REQUIRED_FRAME, "");
+  if (/\b(dose|dosage|inject|administer|treat|cure|therapy|therapeutic outcome|patient protocol)\b/i.test(contentOutsideMandatoryFrame)) violations.push("clinical_or_dosing_language");
   return { valid: violations.length === 0, violations };
 }
 
