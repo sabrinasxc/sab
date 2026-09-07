@@ -5,27 +5,17 @@ on:
   pull_request:
 permissions:
   contents: read
-  issues: write
 jobs:
   verify:
     runs-on: ubuntu-latest
-    timeout-minutes: 15
+    timeout-minutes: 20
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
         with:
           node-version: 22
       - run: npm install --no-audit --no-fund
-      - name: Typecheck
-        id: typecheck
-        continue-on-error: true
-        run: npm run typecheck 2>&1 | tee typecheck.log
-      - name: Report typecheck failure
-        if: steps.typecheck.outcome == 'failure'
-        env:
-          GH_TOKEN: ${{ github.token }}
-        run: gh issue create --title "CI typecheck failure ${{ github.run_number }}" --body-file typecheck.log
-      - name: Fail on typecheck
-        if: steps.typecheck.outcome == 'failure'
-        run: exit 1
+      - run: npm run typecheck
       - run: npm test
+      - run: npm run lint
+      - run: npm run build
