@@ -52,7 +52,15 @@ const FILTER_MISS_PATTERNS = [
   /tiktok/i,
   /read assistant/i,
   /read\.ai/i,
-  /amazon/i,
+];
+
+const AMAZON_PATTERN = /amazon/i;
+const AMAZON_KEEP_PATTERNS = [
+  /pickup/i,
+  /whole foods/i,
+  /subscribe\s*&\s*save/i,
+  /action required/i,
+  /delivery issue/i,
 ];
 
 const RECEIPT_PATTERNS = [
@@ -77,6 +85,15 @@ const PODCAST_PITCH_PATTERNS = [
   /pitch(?:ing)? .* (?:for|to) (?:your )?podcast/i,
 ];
 
+const PODCAST_EXTRA_ASK_PATTERNS = [
+  /sponsor(?:ship|ed)?/i,
+  /partnership/i,
+  /cross[- ]promotion/i,
+  /affiliate/i,
+  /co[- ]host/i,
+  /media partnership/i,
+];
+
 const SEQUENCE_LABS_PATTERNS = [
   /semaglutide/i, /tirzepatide/i, /retatrutide/i, /\bhgh\b/i, /bpc-157/i, /tb-500/i, /nad\+/i,
   /igf-1 lr3/i, /ghk-cu/i, /ipamorelin/i, /tesamorelin/i, /mots-c/i, /thymosin alpha-1/i, /pt-141/i,
@@ -88,6 +105,7 @@ export type DeterministicPersonalAction =
   | "DO_NOT_CONTACT"
   | "DO_NOT_REDRAFT"
   | "FILTER_MISS_REVIEW"
+  | "ACTION_NEEDED_NOTIFICATION"
   | "ARCHIVE_RECEIPT"
   | "ARCHIVE_NOTIFICATION"
   | "ARCHIVE_JUNK"
@@ -124,12 +142,16 @@ export function deterministicPersonalInboxRule(input: PersonalPolicyInput): Dete
     return { action: "DO_NOT_REDRAFT", labels: [], reason: "§8 do-not-redraft sender", requiresHumanReview: false };
   }
 
-  if (FILTER_MISS_PATTERNS.some((pattern) => pattern.test(text))) {
+  if (AMAZON_PATTERN.test(text) && AMAZON_KEEP_PATTERNS.some((pattern) => pattern.test(text))) {
+    return null;
+  }
+
+  if (FILTER_MISS_PATTERNS.some((pattern) => pattern.test(text)) || AMAZON_PATTERN.test(text)) {
     return { action: "FILTER_MISS_REVIEW", labels: [PRIORITY_LABELS.filterMiss], reason: "§4.1 native Gmail filter miss", requiresHumanReview: true };
   }
 
   if (/google docs?/i.test(text) && /@mention|mentioned you|mentioned sabrina/i.test(text)) {
-    return { action: "ARCHIVE_NOTIFICATION", labels: [PRIORITY_LABELS.actionNeeded], reason: "§4.2 Google Docs @mention escalation", requiresHumanReview: true };
+    return { action: "ACTION_NEEDED_NOTIFICATION", labels: [PRIORITY_LABELS.actionNeeded], reason: "§4.2 Google Docs @mention escalation", requiresHumanReview: true };
   }
 
   if (RECEIPT_PATTERNS.some((pattern) => pattern.test(text))) {
@@ -153,6 +175,16 @@ export function deterministicPersonalInboxRule(input: PersonalPolicyInput): Dete
   }
 
   return null;
+}
+
+export function hasPodcastPitchExtraAsk(subject: string | null | undefined, body: string | null | undefined) {
+  const text = `${subject ?? ""}\n${body ?? ""}`;
+  return PODCAST_EXTRA_ASK_PATTERNS.some((pattern) => pattern.test(text));
+}
+
+export function hasKnownPartnerTag(tags: unknown) {
+  if (!Array.isArray(tags)) return false;
+  return tags.some((tag) => typeof tag === "string" && /(?:partner|advisor|fellow|investor|ppp[-_ ]?client|hba[-_ ]?.*fellow)/i.test(tag));
 }
 
 export const SEQUENCE_LABS_REQUIRED_FRAME =
