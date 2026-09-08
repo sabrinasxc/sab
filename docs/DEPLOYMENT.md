@@ -15,6 +15,8 @@ Create a Supabase project and apply migrations in order:
 1. `0001_foundation.sql`
 2. `0002_security_constraints.sql`
 3. `0003_knowledge_and_agent_idempotency.sql`
+4. `0004_gmail_draft_linkage.sql`
+5. `0005_outbound_speaker_outreach.sql`
 
 Configure Supabase Auth with the production application URL and create the initial owner user.
 
